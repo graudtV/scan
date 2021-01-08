@@ -19,10 +19,12 @@ class scanner {
 public:
 	scanner(const char *str)
 	{
-		if ((m_fst = m_cur = strdup(str)) == nullptr)
+		if ((m_fst = m_cur = m_checkpoint = strdup(str)) == nullptr)
 			throw std::bad_alloc();
 	}
 	scanner(const std::string& str) : scanner(str.c_str()) {}
+	scanner(const scanner& other) = delete;
+	scanner& operator =(const scanner& other) = delete;
 	~scanner() { free(m_fst); }
 
 	void restart() { m_cur = m_fst; }
@@ -45,7 +47,6 @@ public:
 	/* scanning regex */
 	scanner& operator >>(const char *s)
 	{
-		char *new_cur = m_cur;
 		while (*s) {
 			char c = *s;
 			if (c == '\\')
@@ -57,21 +58,23 @@ public:
 				case '*':  c = '*';
 				case '?':  c = '?';
 				case '+':  c = '+';
-				default: throw std::invalid_argument("not supported pattern");
+				default:
+					m_cur = m_checkpoint;
+					throw std::invalid_argument("unknown escape sequence");
 				}
 			if (*(s + 1) == '*') {
-				while (*new_cur == c)			
-					++new_cur;
+				while (*m_cur == c)			
+					++m_cur;
 				s += 2;
 				continue;
 			}
 			if (*(s + 1) == '?') {
-				if (*new_cur == c)
-					++new_cur;
+				if (*m_cur == c)
+					++m_cur;
 				s += 2;
 				continue;
 			}
-			if (c != *new_cur) {
+			if (c != *m_cur) {
 				std::string description;
 				if (isprint(c)) {
 					description = "expected symbol '";
@@ -85,11 +88,10 @@ public:
 					description = "expected symbol with code=";
 					description += std::to_string((int) c);
 				}
-				throw scan_error(description, dump_pos(new_cur));
+				throw_scan_error(description, m_cur);
 			}
-			++s, ++new_cur;
+			++s, ++m_cur;
 		}
-		m_cur = new_cur;
 		return *this;
 	}
 
@@ -99,11 +101,17 @@ public:
 	static scanner& end_of_text(scanner& scan)
 	{
 		if (*scan.m_cur != '\0')
-			throw scan_error("symbols are not expected here", scan.dump_pos(scan.m_cur));
+			scan.throw_scan_error("symbols are not expected here", scan.m_cur);
 		return scan;
 	}
+
+	/*  Checkpoint manipulator. If error occurs, position will be returned
+	 * to the position, when manipulator was inserted */
+	static scanner& set_checkpoint(scanner& scan)
+		{ scan.m_checkpoint = scan.m_cur; return scan; }
 private:
 	char *m_fst, *m_cur;
+	char *m_checkpoint;
 
 	/*  scans integer/floating variable using strtoT and returns result
 	 *  Func signature: T strtoT(const char *, char **) - functions
@@ -114,13 +122,13 @@ private:
 		char *new_cur;
 
 		if (isspace(*m_cur))
-			throw scan_error(invalid_arg_msg, dump_pos(m_cur));
+			throw_scan_error(invalid_arg_msg, m_cur);
 		errno = 0;
 		T val = strtoT(m_cur, &new_cur);
 		if (m_cur == new_cur)
-			throw scan_error(invalid_arg_msg, dump_pos(m_cur));
+			throw_scan_error(invalid_arg_msg, m_cur);
 		if (errno)
-			throw scan_error(out_of_range_msg, dump_pos(m_cur));
+			throw_scan_error(out_of_range_msg, m_cur);
 		m_cur = new_cur;
 		return val;	
 	}
@@ -152,8 +160,7 @@ private:
 		long long_val = scan_integer<long>(strtol, invalid_arg_msg, out_of_range_msg);
 		try { return narrow_cast<T>(long_val); }
 		catch (std::invalid_argument&) {
-			m_cur = prev_cur;
-			throw scan_error(out_of_range_msg, dump_pos(m_cur));
+			throw_scan_error(out_of_range_msg, prev_cur);
 		}
 	}
 
@@ -178,10 +185,20 @@ private:
 			res.insert(res.end(), line_end - pos - 1, '~');
 		return res;
 	}
+
+	/* Changes current position to checkpoint position and throws error
+	 * Position dump is printed for err_pos */
+	void throw_scan_error [[ noreturn ]] (const std::string& description, char *err_pos)
+	{
+		m_cur = m_checkpoint;
+		throw scan_error(description, dump_pos(err_pos));
+	}
 };
 
+/* scanner manipulators */
 inline const auto skip_spaces = " *";
 inline const auto end_of_text = scanner::end_of_text;
+inline const auto set_checkpoint = scanner::set_checkpoint;
 
 }; // scn namespace end
 
