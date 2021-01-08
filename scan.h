@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <string>
 #include <cerrno>
+#include <cstring>
 
 namespace scn {
 
