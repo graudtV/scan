@@ -3,6 +3,11 @@
 #ifndef SCAN_H_
 #define SCAN_H_
 
+#include <exception>
+#include <cstdlib>
+#include <string>
+#include <cerrno>
+
 namespace scn {
 
 struct scan_error : public std::runtime_error {
@@ -50,10 +55,18 @@ public:
 				case '\\': c = '\\';
 				case '0':  c = '\0';
 				case '*':  c = '*';
+				case '?':  c = '?';
+				case '+':  c = '+';
 				default: throw std::invalid_argument("not supported pattern");
 				}
 			if (*(s + 1) == '*') {
 				while (*new_cur == c)			
+					++new_cur;
+				s += 2;
+				continue;
+			}
+			if (*(s + 1) == '?') {
+				if (*new_cur == c)
 					++new_cur;
 				s += 2;
 				continue;

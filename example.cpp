@@ -14,7 +14,7 @@ try {
 	double I, U;
 	scan >> "I" >> scn::skip_spaces >> "=" >> scn::skip_spaces >> I >> "A";
 	scan >> "," >> scn::skip_spaces;
-	scan >> "U" >> scn::skip_spaces >> "=" >> scn::skip_spaces >> U >> "V";
+	scan >> "U" >> scn::skip_spaces >> "=" >> scn::skip_spaces >> U >> "V;?";
 	scan >> scn::skip_spaces >> scn::end_of_text;
 
 	std::cout
